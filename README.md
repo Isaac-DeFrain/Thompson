@@ -2,8 +2,10 @@
 
 - NFA to DFA conversion
 
-- DFA minimization
+- DFA minimization (FIX)
 
-- word acceptor
+- DFA and NFA acceptance checker
 
-- equivalence checker
+- Automata equivalence checker (FIX)
+
+- Thompson's construction: RE -> NFA (TODO)
