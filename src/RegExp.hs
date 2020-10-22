@@ -1,4 +1,8 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module RegExp where
+
+import GHC.Generics (Generic)
 
 data RE
     = Empty
@@ -9,7 +13,7 @@ data RE
     | Concat RE
              RE
     | Star RE
-    deriving (Eq, Ord, Read)
+    deriving (Eq, Generic, Ord, Read)
 
 instance Show RE where
     show (Const c) = [c]
