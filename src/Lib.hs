@@ -292,6 +292,7 @@ minimize nfa = minimize $ nfaToDFA nfa
 -- | permute state labels & check for equality
 equivalent :: Automaton -> Automaton -> Bool
 equivalent a1 a2 =
+    a1 == a2 ||
     let ma1 = minimize $ nfaToDFA a1
         ma2 = minimize $ nfaToDFA a2
         sa1 = states ma1

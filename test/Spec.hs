@@ -33,7 +33,7 @@ main =
             --     QC.forAll arbitraryDFA $ \d -> equivalent d $ minimize d
             -- it "should be minimum" $
             --     QC.forAll arbitraryDFA $ \d ->
-            --         minimize d == (minimize . minimize) d
+            --         minimize d == minimize (minimize d)
         describe "DFAs" $ do
             it "do not have epsilon transitions" $
                 QC.forAll arbitraryDFA $ \(DFA _ _ t _) ->
@@ -44,8 +44,13 @@ main =
                     noDups $ map fst $ Map.toList t
             -- it "should be equivalent to themselves" $
             --     QC.forAll arbitraryDFA $ \d -> equivalent d d
-        describe "NFAs do something else" $
-            it "should do what I say it does" $ True `shouldBe` True
+            it "nfaToDFA . nfaToDFA == nfaToDFA" $
+                QC.forAll arbitraryDFA $ \d ->
+                    nfaToDFA (nfaToDFA d) == nfaToDFA d
+            it "equivalence is reflexive" $
+                QC.forAll arbitraryDFA $ \d -> equivalent d d
+        describe "NFAs" $
+            it "nfaToDFA . nfaToDFA == nfaToDFA" $ True `shouldBe` True
         describe "NFA from RE" $ do
             it "Kleene star should accept word of any length" $
                 QC.forAll genChar $ \c -> do
@@ -55,8 +60,6 @@ main =
             it "second" $ True `shouldBe` True
 
 -- Property tests
--- nfaToDFA . nfaToDFA == nfaToDFA
--- minimize . minimize == minimize
 -- equivalent a a == True
 -- equivalent a (minimize a) == True
 -- equivalent (minimize a) a == True
