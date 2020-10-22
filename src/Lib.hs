@@ -376,6 +376,11 @@ replicateEachGen (h:t) = do
     tl <- replicateEachGen t
     pure $ replicate n h <> tl
 
+genStates :: QC.Gen [State]
+genStates = do
+    n <- QC.choose (1, 10) :: QC.Gen Int
+    pure ["s" <> show i | i <- [0 .. n]]
+
 instance QC.Arbitrary (Automaton DFA) where
     arbitrary = D <$> QC.arbitrary
     shrink (D dfa) = D <$> QC.shrink dfa
@@ -386,9 +391,7 @@ instance QC.Arbitrary (Automaton NFA) where
 
 instance QC.Arbitrary DFA where
     arbitrary = do
-        states' <-
-            do n <- QC.choose (1, 10) :: QC.Gen Int
-               pure $ ["s" <> show i | i <- [0 .. n]]
+        states' <- genStates
         final' <- QC.sublistOf states'
         symbols' <- QC.listOf1 QC.arbitrary `QC.suchThat` notElem eps
         states'' <- replicateEachGen states'
@@ -401,8 +404,21 @@ instance QC.Arbitrary DFA where
     -- shrink states & adjust final states and delta accordingly
 
 instance QC.Arbitrary NFA where
-    arbitrary = undefined
+    arbitrary = do
+        states' <- genStates
+        final' <- QC.sublistOf states'
+        symbols' <- QC.listOf1 QC.arbitrary
+        states'' <- replicateEachGen states'
+        let start' = "s0"
+        perms <-
+            QC.vectorOf (length states') $
+            uniqueSort <$> QC.sublistOf states'' `QC.suchThat` (/= [])
+        deltaList <-
+            QC.sublistOf (zip (zip states' symbols') perms) `QC.suchThat`
+            (/= [])
+        pure $ NFA states' start' (Map.fromList deltaList) final'
     shrink = undefined
+    -- shrink states & adjust final states and delta accordingly
 
 deriving instance Eq (Automaton DFA)
 

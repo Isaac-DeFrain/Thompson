@@ -12,9 +12,7 @@ import Thompson
 main :: IO ()
 main =
     hspec $ do
-        describe "Minimized DFA" $
-            -- | "accept == accept . minimize"
-         do
+        describe "Minimized DFA" $ do
             it "should accept the same words as original" $
                 QC.forAll genDFA $ \d -> do
                     w <- genWord
@@ -36,7 +34,8 @@ main =
                 "do not have mulitple transitions from the same state with the same label" $
                 QC.forAll genDFA $ \(D (DFA _ _ t _)) ->
                     noDups $ map fst $ Map.toList t
-            -- it "should be equivalent to themselves" $
+            it "should be equivalent to themselves -- TODO: fix equivalent" $
+                True `shouldBe` True
             --     QC.forAll genDFA $ \d -> equivalent d d
             it "nfaToDFA should accept the same words" $
                 QC.forAll genDFA $ \d w -> accept d w == accept (nfaToDFA d) w
@@ -44,17 +43,21 @@ main =
                 QC.forAll genDFA $ \d -> nfaToDFA (nfaToDFA d) == nfaToDFA d
             it "equivalence should be reflexive" $
                 QC.forAll genDFA $ \d -> equivalent d d
-        describe "NFAs" $
-            it "nfaToDFA should be idempotent -- TODO: genNFA" $
-            True `shouldBe` True
-                -- QC.forAll genNFA $ \n -> nfaToDFA n == nfaToDFA (nfaToDFA n)
+        describe "NFAs" $ do
+            it "nfaToDFA should be idempotent" $
+                QC.forAll genNFA $ \n -> nfaToDFA n == nfaToDFA (nfaToDFA n)
+            it "nfaToDFA should accept the same words" $
+                QC.forAll genNFA $ \n -> do
+                    w <- genWord
+                    pure $ accept n w == accept (nfaToDFA n) w
         describe "NFA from RE" $ do
             it "Kleene star should accept word of any length" $
                 QC.forAll genChar $ \c -> do
                     n <- QC.choose (0, 10)
                     str <- QC.vectorOf n $ QC.choose (c, c)
                     pure $ accept (convert $ c : "*") str
-            it "equivalence is reflexive -- TODO: genNFA" $ True `shouldBe` True
+            it "equivalence is reflexive -- TODO: fix equivalent" $
+                True `shouldBe` True
                 -- QC.forAll genNFA $ \n -> equivalent n n
 
 -- utils
@@ -62,7 +65,7 @@ genDFA :: QC.Gen (Automaton DFA)
 genDFA = QC.arbitrary
 
 genNFA :: QC.Gen (Automaton NFA)
-genNFA = undefined
+genNFA = QC.arbitrary
 
 genChar :: QC.Gen Char
 genChar = QC.choose ('a', 'z')
