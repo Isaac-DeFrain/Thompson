@@ -79,13 +79,6 @@ endingStates begin a (x:xs) _ =
     let nextStates = concatMap (propogate a x) begin
      in endingStates nextStates a xs nextStates
 
--- | sort and delete duplicates
-uniqueSort :: (Eq a, Ord a) => [a] -> [a]
-uniqueSort l = dedup l []
-  where
-    dedup [] l' = List.sort l'
-    dedup (x:xs) l' = dedup (filter (/= x) xs) $ x : l'
-
 -- | checks whether the Automaton a accepts the given word (or empty seq)
 accept :: Automaton a -> [Symbol] -> Bool
 accept a [] = any (`elem` endingStates [start a] a [eps] []) $ final a
@@ -95,19 +88,9 @@ accept a syms = any (`elem` endingStates [start a] a syms []) $ final a
 -- | the intermediate map connects the DFA to its NFA origins
 type IntermediateMap = Map.Map State [State]
 
--- | change the role of keys and values in an invertible map
-kvswap :: Ord b => Map.Map a b -> Map.Map b a
-kvswap m = Map.fromList $ map (\(a, b) -> (b, a)) $ Map.toList m
-
--- | general form of renaming states
-kvTransMap ::
-       (Ord a, Ord b, Ord c) => (a -> b) -> Map.Map (a, c) a -> Map.Map (b, c) b
-kvTransMap f m' = Map.mapKeys (Bi.first f) $ Map.map f m'
-
 -- | initialize a map which ultimately creates the DFA transition from an NFA
-initializeDFAmap :: Automaton a -> IntermediateMap
+initializeDFAmap :: Automaton NFA -> IntermediateMap
 initializeDFAmap (N (NFA _ s t _)) = Map.singleton "s0" $ epsClosure t [s]
-initializeDFAmap _ = error "initializeDFAmap can only be called on an NFA" -- only use NFA as input
 
 -- | given the NFA transition and intermediate map, compute the list of reachable NFA states from the given state and symbol
 delta :: Ndelta -> IntermediateMap -> State -> Symbol -> [State]
@@ -138,7 +121,7 @@ buildStates nt im syms =
             else buildStates nt updated syms
 
 -- | produces DFA transition from final intermediate map
-transitionDFA :: Automaton a -> IntermediateMap -> [Symbol] -> Ddelta
+transitionDFA :: Automaton NFA -> IntermediateMap -> [Symbol] -> Ddelta
 transitionDFA (N (NFA _ _ nt _)) im syms =
     foldr
         (\st m' ->
@@ -151,7 +134,6 @@ transitionDFA (N (NFA _ _ nt _)) im syms =
                  syms)
         Map.empty $
     Map.keys im
-transitionDFA _ _ _ = error "transitionDFA can only be called on an NFA"
 
 -- | final states of the generated DFA
 finalStatesDFA :: Automaton a -> IntermediateMap -> [State]
@@ -160,7 +142,6 @@ finalStatesDFA nfa im =
 
 -- | produces a DFA (unminimized) from an NFA when given an NFA
 nfaToDFA :: Automaton a -> Automaton DFA
--- TODO: rename states first
 nfaToDFA nfa@(N (NFA _ _ nt _)) =
     let im' = initializeDFAmap nfa
         syms = symbols nfa
@@ -168,7 +149,7 @@ nfaToDFA nfa@(N (NFA _ _ nt _)) =
         dt = transitionDFA nfa im syms
         f = finalStatesDFA nfa im
      in D $ DFA (Map.keys im) "s0" dt f
--- rename states whn given a DFA
+-- rename states when given a DFA
 nfaToDFA (D (DFA s i dt f)) =
     let tmp = map (\x -> "s" <> show x) indices
         m = Map.fromList $ zip s tmp
@@ -237,7 +218,7 @@ originalToMinStatesMap p =
         p
 
 -- build transitions for minimized DFA from original transition and given partition
-minDelta :: Automaton a -> Partition -> Ddelta
+minDelta :: Automaton DFA -> Partition -> Ddelta
 minDelta dfa@(D (DFA _ _ dt _)) p =
     let tmp = originalToMinStatesMap p
         tmp' = kvswap tmp
@@ -256,7 +237,6 @@ minDelta dfa@(D (DFA _ _ dt _)) p =
                      (symbols dfa))
             Map.empty $
         Map.keys tmp'
-minDelta _ _ = error "minDelta can only be called on a DFA"
 
 -- | given original DFA and partition, compute minimized final states
 minFinalStates :: Automaton DFA -> Partition -> [State]
@@ -366,6 +346,22 @@ final (D (DFA _ _ _ f)) = f
 symbols :: Automaton a -> [Symbol]
 symbols (N (NFA _ _ nt _)) = filter (/= '_') $ map (snd . fst) $ Map.toList nt
 symbols (D (DFA _ _ dt _)) = map (snd . fst) $ Map.toList dt
+
+-- | sort and delete duplicates
+uniqueSort :: (Eq a, Ord a) => [a] -> [a]
+uniqueSort l = dedup l []
+  where
+    dedup [] l' = List.sort l'
+    dedup (x:xs) l' = dedup (filter (/= x) xs) $ x : l'
+
+-- | change the role of keys and values in an invertible map
+kvswap :: Ord b => Map.Map a b -> Map.Map b a
+kvswap m = Map.fromList $ map (\(a, b) -> (b, a)) $ Map.toList m
+
+-- | general form of renaming states
+kvTransMap ::
+       (Ord a, Ord b, Ord c) => (a -> b) -> Map.Map (a, c) a -> Map.Map (b, c) b
+kvTransMap f m' = Map.mapKeys (Bi.first f) $ Map.map f m'
 
 instance QC.Arbitrary [State] where
     arbitrary = do
