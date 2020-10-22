@@ -2,8 +2,11 @@
 
 import qualified Data.Map as Map
 import Lib
+
+-- import RegExp
 import Test.Hspec
 import qualified Test.QuickCheck as QC
+import Thompson
 
 -- TODO: use QC.quickCheckWith
 symbols :: [Symbol]
@@ -11,6 +14,9 @@ symbols = ['a' .. 'z']
 
 arbitraryDFA :: QC.Gen Automaton
 arbitraryDFA = QC.arbitrary
+
+genChar :: QC.Gen Char
+genChar = QC.choose ('a', 'z')
 
 noDups :: Eq a => [a] -> Bool
 noDups [] = True
@@ -40,6 +46,13 @@ main =
             --     QC.forAll arbitraryDFA $ \d -> equivalent d d
         describe "NFAs do something else" $
             it "should do what I say it does" $ True `shouldBe` True
+        describe "NFA from RE" $ do
+            it "Kleene star should accept word of any length" $
+                QC.forAll genChar $ \c -> do
+                    n <- QC.choose (0, 10)
+                    str <- QC.vectorOf n $ QC.choose (c, c)
+                    pure $ accept (convert $ c : "*") str
+            it "second" $ True `shouldBe` True
 
 -- Property tests
 -- nfaToDFA . nfaToDFA == nfaToDFA
