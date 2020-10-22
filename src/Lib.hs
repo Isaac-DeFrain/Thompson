@@ -1,10 +1,10 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE FlexibleContexts, FlexibleInstances #-}
 
 -- TODO: equivalent Map.! error
--- TODO: Automaton GADT
 module Lib
     ( Automaton(..)
+    , DFA(..)
+    , NFA(..)
     , Ddelta
     , Ndelta
     , State
@@ -20,6 +20,7 @@ import qualified Data.Bifunctor as Bi
 import qualified Data.List as List
 import qualified Data.Map as Map
 import Data.Maybe
+import GHC.Generics (Generic)
 import qualified Test.QuickCheck as QC
 
 type Symbol = Char
@@ -32,29 +33,36 @@ type Ddelta = Map.Map (State, Symbol) State
 -- | nondeterministic transition function
 type Ndelta = Map.Map (State, Symbol) [State]
 
-data Automaton
-    = NFA [State] -- ^ states
-          State -- ^ start state
-          Ndelta -- ^ nondeterministic transition
-          [State] -- ^ final states
-    | DFA [State] -- ^ states
-          State -- ^ start state
-          Ddelta -- ^ deterministic transition
-          [State] -- ^ final states
-    deriving (Eq, Ord)
+data NFA =
+    NFA [State] -- ^ states
+        State -- ^ start state
+        Ndelta -- ^ nondeterministic transition
+        [State] -- ^ final states
+    deriving (Eq, Generic, Ord)
+
+data DFA =
+    DFA [State] -- ^ states
+        State -- ^ start state
+        Ddelta -- ^ deterministic transition
+        [State] -- ^ final states
+    deriving (Eq, Generic, Ord)
+
+data Automaton a where
+    N :: NFA -> Automaton NFA
+    D :: DFA -> Automaton DFA
 
 -- | empty symbol
 eps :: Symbol
 eps = '_'
 
 -- | arbitrary number of eps transitions before and after any symbol transition
-propogate :: Automaton -> Symbol -> State -> [State]
-propogate (NFA _ _ t _) sym s =
+propogate :: Automaton a -> Symbol -> State -> [State]
+propogate (N (NFA _ _ t _)) sym s =
     let tmp =
             concatMap (\x -> fromMaybe [] (Map.lookup (x, sym) t)) $
             epsClosure t [s]
      in tmp <> epsClosure t tmp
-propogate (DFA _ _ t _) sym s = maybe [] pure $ Map.lookup (s, sym) t
+propogate (D (DFA _ _ t _)) sym s = maybe [] pure $ Map.lookup (s, sym) t
 
 -- | epsilon closure of a list of states
 epsClosure :: Ndelta -> [State] -> [State]
@@ -65,7 +73,7 @@ epsClosure t sts =
             else epsClosure t tmp
 
 -- | list of states reached from beginning list of states after consuming all provided symbols
-endingStates :: [State] -> Automaton -> [Symbol] -> [State] -> [State]
+endingStates :: [State] -> Automaton a -> [Symbol] -> [State] -> [State]
 endingStates _ _ [] st = uniqueSort st
 endingStates begin a (x:xs) _ =
     let nextStates = concatMap (propogate a x) begin
@@ -78,8 +86,8 @@ uniqueSort l = dedup l []
     dedup [] l' = List.sort l'
     dedup (x:xs) l' = dedup (filter (/= x) xs) $ x : l'
 
--- | checks whether the automaton accepts the given word (or empty seq)
-accept :: Automaton -> [Symbol] -> Bool
+-- | checks whether the Automaton a accepts the given word (or empty seq)
+accept :: Automaton a -> [Symbol] -> Bool
 accept a [] = any (`elem` endingStates [start a] a [eps] []) $ final a
 accept a syms = any (`elem` endingStates [start a] a syms []) $ final a
 
@@ -97,8 +105,8 @@ kvTransMap ::
 kvTransMap f m' = Map.mapKeys (Bi.first f) $ Map.map f m'
 
 -- | initialize a map which ultimately creates the DFA transition from an NFA
-initializeDFAmap :: Automaton -> IntermediateMap
-initializeDFAmap (NFA _ s t _) = Map.singleton "s0" $ epsClosure t [s]
+initializeDFAmap :: Automaton a -> IntermediateMap
+initializeDFAmap (N (NFA _ s t _)) = Map.singleton "s0" $ epsClosure t [s]
 initializeDFAmap _ = error "initializeDFAmap can only be called on an NFA" -- only use NFA as input
 
 -- | given the NFA transition and intermediate map, compute the list of reachable NFA states from the given state and symbol
@@ -130,8 +138,8 @@ buildStates nt im syms =
             else buildStates nt updated syms
 
 -- | produces DFA transition from final intermediate map
-transitionDFA :: Automaton -> IntermediateMap -> [Symbol] -> Ddelta
-transitionDFA (NFA _ _ nt _) im syms =
+transitionDFA :: Automaton a -> IntermediateMap -> [Symbol] -> Ddelta
+transitionDFA (N (NFA _ _ nt _)) im syms =
     foldr
         (\st m' ->
              foldr
@@ -146,29 +154,29 @@ transitionDFA (NFA _ _ nt _) im syms =
 transitionDFA _ _ _ = error "transitionDFA can only be called on an NFA"
 
 -- | final states of the generated DFA
-finalStatesDFA :: Automaton -> IntermediateMap -> [State]
+finalStatesDFA :: Automaton a -> IntermediateMap -> [State]
 finalStatesDFA nfa im =
     map (kvswap im Map.!) $ filter (any (`elem` final nfa)) $ Map.elems im
 
 -- | produces a DFA (unminimized) from an NFA when given an NFA
-nfaToDFA :: Automaton -> Automaton
+nfaToDFA :: Automaton a -> Automaton DFA
 -- TODO: rename states first
-nfaToDFA nfa@(NFA _ _ nt _) =
+nfaToDFA nfa@(N (NFA _ _ nt _)) =
     let im' = initializeDFAmap nfa
         syms = symbols nfa
         im = buildStates nt im' syms
         dt = transitionDFA nfa im syms
         f = finalStatesDFA nfa im
-     in DFA (Map.keys im) "s0" dt f
+     in D $ DFA (Map.keys im) "s0" dt f
 -- rename states whn given a DFA
-nfaToDFA (DFA s i dt f) =
+nfaToDFA (D (DFA s i dt f)) =
     let tmp = map (\x -> "s" <> show x) indices
         m = Map.fromList $ zip s tmp
         s' = map (m Map.!) s
         i' = m Map.! i
         dt' = kvTransMap (m Map.!) dt
         f' = map (m Map.!) f
-     in DFA s' i' dt' f'
+     in D $ DFA s' i' dt' f'
   where
     indices :: [Int]
     indices = [0 ..]
@@ -180,7 +188,7 @@ nfaToDFA (DFA s i dt f) =
 type Partition = [[State]]
 
 -- | initial partition == [nonfinal states, final states]
-initialPartition :: Automaton -> Partition
+initialPartition :: Automaton a -> Partition
 initialPartition a = [states a List.\\ f, f]
   where
     f = final a
@@ -229,8 +237,8 @@ originalToMinStatesMap p =
         p
 
 -- build transitions for minimized DFA from original transition and given partition
-minDelta :: Automaton -> Partition -> Ddelta
-minDelta dfa@(DFA _ _ dt _) p =
+minDelta :: Automaton a -> Partition -> Ddelta
+minDelta dfa@(D (DFA _ _ dt _)) p =
     let tmp = originalToMinStatesMap p
         tmp' = kvswap tmp
      in foldr
@@ -251,8 +259,8 @@ minDelta dfa@(DFA _ _ dt _) p =
 minDelta _ _ = error "minDelta can only be called on a DFA"
 
 -- | given original DFA and partition, compute minimized final states
-minFinalStates :: Automaton -> Partition -> [State]
-minFinalStates (DFA _ _ _ f) p =
+minFinalStates :: Automaton DFA -> Partition -> [State]
+minFinalStates (D (DFA _ _ _ f)) p =
     uniqueSort $ map ((originalToMinStatesMap p Map.!) . firstWithin p) f
   where
     firstWithin (h:t) x =
@@ -260,37 +268,35 @@ minFinalStates (DFA _ _ _ f) p =
             then h
             else firstWithin t x
     firstWithin _ _ = error "firstWithin can only be called on a nonempty list"
-minFinalStates _ _ = error "minFinalStates can only be called on a DFA"
 
 -- | connects original start state to minimized start state
-minInitialState :: Automaton -> Partition -> State
-minInitialState (DFA _ i _ _) p = head $ first (elem i) p
+minInitialState :: Automaton DFA -> Partition -> State
+minInitialState (D (DFA _ i _ _)) p = head $ first (elem i) p
   where
     first pr (h:t) =
         if pr h
             then h
             else first pr t
     first _ _ = error "first can only be called on a nonempty list"
-minInitialState _ _ = error "minInitialStates can only be called on a DFA"
 
 -- | minimize DFA
-minimize :: Automaton -> Automaton
-minimize dfa@DFA {} =
+minimize :: Automaton a -> Automaton DFA
+minimize dfa@(D DFA {}) =
     let d = nfaToDFA dfa
-        DFA _ _ t _ = d
+        D (DFA _ _ t _) = d
         p = refine t $ initialPartition d
         mt = minDelta d p
         i = minInitialState d p
         fs = minFinalStates d p
         st = uniqueSort $ map fst $ Map.keys mt
-     in DFA st i mt fs
+     in D $ DFA st i mt fs
 minimize nfa = minimize $ nfaToDFA nfa
 
 -- | equivalence of automata
 -- | relabel states & minimize
 -- | check number of states & final states
 -- | permute state labels & check for equality
-equivalent :: Automaton -> Automaton -> Bool
+equivalent :: Automaton DFA -> Automaton DFA -> Bool
 equivalent a1 a2 =
     a1 == a2 ||
     let ma1 = minimize $ nfaToDFA a1
@@ -299,16 +305,16 @@ equivalent a1 a2 =
      in sa1 == states ma2 &&
         length (final ma1) == length (final ma2) && equalPermutation ma1 ma2
   where
-    equalPermutation (DFA s i t1 f1) (DFA _ _ t2 f2) =
+    equalPermutation :: Automaton DFA -> Automaton DFA -> Bool
+    equalPermutation (D (DFA s i t1 f1)) (D (DFA _ _ t2 f2)) =
         let ps = map (i :) $ List.permutations $ s List.\\ [i]
          in any (\ss ->
                      let m = Map.fromList (zip s ss)
                       in map (m Map.!) f1 == f2 && kvTransMap (m Map.!) t1 == t2)
                 ps
-    equalPermutation _ _ = error "equalPermutation can only be called on DFAs"
 
-instance Show Automaton where
-    show (DFA s i t f) =
+instance Show (Automaton a) where
+    show (D (DFA s i t f)) =
         "~DFA~\n" <> "  states: " <> show s <> "\n" <> "  start:  " <> show i <>
         "\n" <>
         "  delta:  " <>
@@ -316,7 +322,7 @@ instance Show Automaton where
         "  final:  " <>
         show f <>
         "\n"
-    show (NFA s i t f) =
+    show (N (NFA s i t f)) =
         "~NFA~\n" <> "  states: " <> show s <> "\n" <> "  start:  " <> show i <>
         "\n" <>
         "  delta:  " <>
@@ -343,23 +349,23 @@ show' m =
 -- Helper functions --
 ----------------------
 -- states accessor
-states :: Automaton -> [State]
-states (NFA s _ _ _) = s
-states (DFA s _ _ _) = s
+states :: Automaton a -> [State]
+states (N (NFA s _ _ _)) = s
+states (D (DFA s _ _ _)) = s
 
 -- start state accessor
-start :: Automaton -> State
-start (NFA _ s _ _) = s
-start (DFA _ s _ _) = s
+start :: Automaton a -> State
+start (N (NFA _ s _ _)) = s
+start (D (DFA _ s _ _)) = s
 
 -- final states accessor
-final :: Automaton -> [State]
-final (NFA _ _ _ f) = f
-final (DFA _ _ _ f) = f
+final :: Automaton a -> [State]
+final (N (NFA _ _ _ f)) = f
+final (D (DFA _ _ _ f)) = f
 
-symbols :: Automaton -> [Symbol]
-symbols (NFA _ _ nt _) = filter (/= '_') $ map (snd . fst) $ Map.toList nt
-symbols (DFA _ _ dt _) = map (snd . fst) $ Map.toList dt
+symbols :: Automaton a -> [Symbol]
+symbols (N (NFA _ _ nt _)) = filter (/= '_') $ map (snd . fst) $ Map.toList nt
+symbols (D (DFA _ _ dt _)) = map (snd . fst) $ Map.toList dt
 
 instance QC.Arbitrary [State] where
     arbitrary = do
@@ -374,7 +380,15 @@ replicateEachGen (h:t) = do
     tl <- replicateEachGen t
     pure $ replicate n h <> tl
 
-instance QC.Arbitrary Automaton where
+instance QC.Arbitrary (Automaton DFA) where
+    arbitrary = D <$> QC.arbitrary
+    shrink (D dfa) = D <$> QC.shrink dfa
+
+instance QC.Arbitrary (Automaton NFA) where
+    arbitrary = N <$> QC.arbitrary
+    shrink (N nfa) = N <$> QC.shrink nfa
+
+instance QC.Arbitrary DFA where
     arbitrary = do
         states' <-
             do n <- QC.choose (1, 10) :: QC.Gen Int
@@ -389,3 +403,11 @@ instance QC.Arbitrary Automaton where
         pure $ DFA states' start' (Map.fromList deltaList) final'
     shrink = undefined
     -- shrink states & adjust final states and delta accordingly
+
+instance QC.Arbitrary NFA where
+    arbitrary = undefined
+    shrink = undefined
+
+deriving instance Eq (Automaton DFA)
+
+deriving instance Eq (Automaton NFA)

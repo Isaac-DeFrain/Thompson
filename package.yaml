@@ -24,6 +24,13 @@ dependencies:
 - hspec
 - QuickCheck
 
+default-extensions:
+  - DeriveGeneric
+  - FlexibleContexts
+  - FlexibleInstances
+  - GADTs
+  - StandaloneDeriving
+
 library:
   source-dirs: src
 
