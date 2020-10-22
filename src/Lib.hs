@@ -77,8 +77,9 @@ uniqueSort l = dedup l []
     dedup [] l' = List.sort l'
     dedup (x:xs) l' = dedup (filter (/= x) xs) $ x : l'
 
--- | checks whether the automaton accepts the given word
+-- | checks whether the automaton accepts the given word (or empty seq)
 accept :: Automaton -> [Symbol] -> Bool
+accept a [] = any (`elem` endingStates [start a] a [eps] []) $ final a
 accept a syms = any (`elem` endingStates [start a] a syms []) $ final a
 
 -- | NFAtoDFA

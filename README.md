@@ -8,4 +8,4 @@
 
 - Automata equivalence checker (FIX)
 
-- Thompson's construction: RE -> NFA (TODO)
+- Thompson's construction: RE -> NFA
