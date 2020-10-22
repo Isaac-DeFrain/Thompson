@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances #-}
 
 -- TODO: equivalent Map.! error
+-- TODO: Automaton GADT
 module Lib
     ( Automaton(..)
     , Ddelta
@@ -52,7 +53,7 @@ propogate (NFA _ _ t _) sym s =
     let tmp =
             concatMap (\x -> fromMaybe [] (Map.lookup (x, sym) t)) $
             epsClosure t [s]
-     in tmp ++ epsClosure t tmp
+     in tmp <> epsClosure t tmp
 propogate (DFA _ _ t _) sym s = maybe [] pure $ Map.lookup (s, sym) t
 
 -- | epsilon closure of a list of states
@@ -108,15 +109,15 @@ delta nt im st sym =
     concatMap (\x -> fromMaybe [] (Map.lookup (x, sym) nt)) $
     fromMaybe [] $ Map.lookup st im
 
--- if a genuinely new state is produced, add it to the intermediate map
+-- | if a genuinely new state is produced, add it to the intermediate map
 updateStates :: Ndelta -> IntermediateMap -> State -> Symbol -> IntermediateMap
 updateStates nt im st sym =
     let d = delta nt im st sym
-     in if d `elem` Map.elems im ++ [[]]
+     in if d `elem` Map.elems im <> [[]]
             then im
-            else Map.insert ("s" ++ show (Map.size im)) d im
+            else Map.insert ("s" <> show (Map.size im)) d im
 
--- produces the final intermediate map for the DFA from the initializeDFAmap
+-- | produces the final intermediate map for the DFA from initializeDFAmap
 buildStates :: Ndelta -> IntermediateMap -> [Symbol] -> IntermediateMap
 buildStates nt im syms =
     let updated =
@@ -128,7 +129,7 @@ buildStates nt im syms =
             then im
             else buildStates nt updated syms
 
--- produces DFA transition from final intermediate map
+-- | produces DFA transition from final intermediate map
 transitionDFA :: Automaton -> IntermediateMap -> [Symbol] -> Ddelta
 transitionDFA (NFA _ _ nt _) im syms =
     foldr
@@ -144,13 +145,14 @@ transitionDFA (NFA _ _ nt _) im syms =
     Map.keys im
 transitionDFA _ _ _ = error "transitionDFA can only be called on an NFA"
 
--- final states of the generated DFA
+-- | final states of the generated DFA
 finalStatesDFA :: Automaton -> IntermediateMap -> [State]
 finalStatesDFA nfa im =
     map (kvswap im Map.!) $ filter (any (`elem` final nfa)) $ Map.elems im
 
--- produces a DFA (unminimized) from an NFA
+-- | produces a DFA (unminimized) from an NFA when given an NFA
 nfaToDFA :: Automaton -> Automaton
+-- TODO: rename states first
 nfaToDFA nfa@(NFA _ _ nt _) =
     let im' = initializeDFAmap nfa
         syms = symbols nfa
@@ -158,15 +160,18 @@ nfaToDFA nfa@(NFA _ _ nt _) =
         dt = transitionDFA nfa im syms
         f = finalStatesDFA nfa im
      in DFA (Map.keys im) "s0" dt f
--- rename states
+-- rename states whn given a DFA
 nfaToDFA (DFA s i dt f) =
-    let tmp = map (\x -> "s" ++ show x) ([0 ..] :: [Int])
+    let tmp = map (\x -> "s" <> show x) indices
         m = Map.fromList $ zip s tmp
         s' = map (m Map.!) s
         i' = m Map.! i
         dt' = kvTransMap (m Map.!) dt
         f' = map (m Map.!) f
      in DFA s' i' dt' f'
+  where
+    indices :: [Int]
+    indices = [0 ..]
 
 ------------------------
 -- Minimizing the DFA --
@@ -174,12 +179,6 @@ nfaToDFA (DFA s i dt f) =
 -- | state partition for minimizing a DFA 
 type Partition = [[State]]
 
--- | determines if NFA is really a DFA in disguise
--- checkDFA :: Automaton -> Bool
--- checkDFA (NFA _ _ nt _) =
---     let kvs = Map.toList nt
---      in all ((/= eps) . snd . fst) kvs && all ((== 1) . length . snd) kvs
--- checkDFA _ = True
 -- | initial partition == [nonfinal states, final states]
 initialPartition :: Automaton -> Partition
 initialPartition a = [states a List.\\ f, f]
@@ -225,7 +224,7 @@ refine dt p =
 originalToMinStatesMap :: Partition -> Map.Map [State] State
 originalToMinStatesMap p =
     foldr
-        (\x m -> Map.insert x ("s" ++ show (length p - Map.size m - 1)) m)
+        (\x m -> Map.insert x ("s" <> show (length p - Map.size m - 1)) m)
         Map.empty
         p
 
@@ -309,21 +308,21 @@ equivalent a1 a2 =
 
 instance Show Automaton where
     show (DFA s i t f) =
-        "~DFA~\n" ++
-        "  states: " ++
-        show s ++
-        "\n" ++
-        "  start:  " ++
-        show i ++
-        "\n" ++ "  delta:  " ++ show' t ++ "  final:  " ++ show f ++ "\n"
+        "~DFA~\n" <> "  states: " <> show s <> "\n" <> "  start:  " <> show i <>
+        "\n" <>
+        "  delta:  " <>
+        show' t <>
+        "  final:  " <>
+        show f <>
+        "\n"
     show (NFA s i t f) =
-        "~NFA~\n" ++
-        "  states: " ++
-        show s ++
-        "\n" ++
-        "  start:  " ++
-        show i ++
-        "\n" ++ "  delta:  " ++ show' t ++ "  final:  " ++ show f ++ "\n"
+        "~NFA~\n" <> "  states: " <> show s <> "\n" <> "  start:  " <> show i <>
+        "\n" <>
+        "  delta:  " <>
+        show' t <>
+        "  final:  " <>
+        show f <>
+        "\n"
 
 show' :: (Ord a, Ord b, Show a, Show b, Show c) => Map.Map (a, b) c -> String
 show' m =
@@ -331,12 +330,12 @@ show' m =
         k = fst $ fst $ head kv
         (grp, rest) = List.break (\x -> (fst . fst) x /= k) kv
      in case rest of
-            [] -> showKV grp ++ "\n"
+            [] -> showKV grp <> "\n"
             _ ->
-                showKV grp ++
-                "\n" ++ replicate 10 ' ' ++ show' (Map.fromList rest)
+                showKV grp <> "\n" <> replicate 10 ' ' <>
+                show' (Map.fromList rest)
   where
-    showKV ((a, b):tl) = show a ++ " -> " ++ show b ++ " " ++ showKV tl
+    showKV ((a, b):tl) = show a <> " -> " <> show b <> " " <> showKV tl
     showKV _ = ""
 
 ----------------------
@@ -364,7 +363,7 @@ symbols (DFA _ _ dt _) = map (snd . fst) $ Map.toList dt
 instance QC.Arbitrary [State] where
     arbitrary = do
         n <- QC.arbitrary :: QC.Gen Int
-        pure $ ["s" <> show i | i <- [0 .. n]]
+        pure ["s" <> show i | i <- [0 .. n]]
     shrink = List.inits
 
 replicateEachGen :: (QC.Arbitrary a) => [a] -> QC.Gen [a]
@@ -372,7 +371,7 @@ replicateEachGen [] = pure []
 replicateEachGen (h:t) = do
     n <- QC.choose (1, 5)
     tl <- replicateEachGen t
-    pure $ replicate n h ++ tl
+    pure $ replicate n h <> tl
 
 instance QC.Arbitrary Automaton where
     arbitrary = do
