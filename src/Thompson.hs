@@ -1,4 +1,7 @@
-module Thompson where
+module Thompson
+    ( convert
+    , equivalent
+    ) where
 
 import Lib
 import RegExp
@@ -48,8 +51,12 @@ convert' (Star r) = N $ NFA allStates "s0" allTrans final
     addTrans1 = Map.singleton (last st', eps) $ [head st'] <> final
     allTrans = Map.unions [t', addTrans0, addTrans1]
 
+-- | convert RE string to an NFA using Thompson's construction
 convert :: String -> Automaton NFA
 convert = convert' . parseRE
+
+equivalent :: String -> String -> Bool
+equivalent r1 r2 = equivalentDFA (minimize $ convert r1) $ minimize $ convert r2
 
 -- utils
 adjustState :: Int -> State -> State

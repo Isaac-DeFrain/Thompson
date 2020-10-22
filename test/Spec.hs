@@ -17,12 +17,12 @@ main =
                 QC.forAll genDFA $ \d -> do
                     w <- genWord
                     pure $ accept d w == accept (minimize d) w
-            it "should be equivalent to original1 -- TODO: fix equivalent" $
+            it "should be equivalent to original1 -- TODO: fix equivalentDFA" $
                 True `shouldBe` True
-            --     QC.forAll genDFA $ \d -> equivalent d $ minimize d
-            it "should be equivalent to original2 -- TODO: fix equivalent" $
+            --     QC.forAll genDFA $ \d -> equivalentDFA d $ minimize d
+            it "should be equivalent to original2 -- TODO: fix equivalentDFA" $
                 True `shouldBe` True
-            --     QC.forAll genDFA $ \d -> equivalent (minimize d) d
+            --     QC.forAll genDFA $ \d -> equivalentDFA (minimize d) d
             it "should be minimum -- TODO: fix minimize" $ True `shouldBe` True
             --     QC.forAll genDFA $ \d ->
             --         minimize d == minimize (minimize d)
@@ -34,15 +34,15 @@ main =
                 "do not have mulitple transitions from the same state with the same label" $
                 QC.forAll genDFA $ \(D (DFA _ _ t _)) ->
                     noDups $ map fst $ Map.toList t
-            it "should be equivalent to themselves -- TODO: fix equivalent" $
+            it "should be equivalent to themselves -- TODO: fix equivalentDFA" $
                 True `shouldBe` True
-            --     QC.forAll genDFA $ \d -> equivalent d d
+            --     QC.forAll genDFA $ \d -> equivalentDFA d d
             it "nfaToDFA should accept the same words" $
                 QC.forAll genDFA $ \d w -> accept d w == accept (nfaToDFA d) w
             it "nfaToDFA should be idempotent" $
                 QC.forAll genDFA $ \d -> nfaToDFA (nfaToDFA d) == nfaToDFA d
             it "equivalence should be reflexive" $
-                QC.forAll genDFA $ \d -> equivalent d d
+                QC.forAll genDFA $ \d -> equivalentDFA d d
         describe "NFAs" $ do
             it "nfaToDFA should be idempotent" $
                 QC.forAll genNFA $ \n -> nfaToDFA n == nfaToDFA (nfaToDFA n)
@@ -56,9 +56,9 @@ main =
                     n <- QC.choose (0, 10)
                     str <- QC.vectorOf n $ QC.choose (c, c)
                     pure $ accept (convert $ c : "*") str
-            it "equivalence is reflexive -- TODO: fix equivalent" $
+            it "equivalence is reflexive -- TODO: fix equivalentDFA" $
                 True `shouldBe` True
-                -- QC.forAll genNFA $ \n -> equivalent n n
+                -- QC.forAll genNFA $ \n -> equivalentDFA n n
 
 -- utils
 genDFA :: QC.Gen (Automaton DFA)

@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
--- TODO: equivalent Map.! error
+-- TODO: equivalentDFA Map.! error
 module Lib
     ( Automaton(..)
     , DFA(..)
@@ -11,7 +11,7 @@ module Lib
     , Symbol
     , accept
     , eps
-    , equivalent
+    , equivalentDFA
     , nfaToDFA
     , minimize
     ) where
@@ -276,8 +276,8 @@ minimize nfa = minimize $ nfaToDFA nfa
 -- | relabel states & minimize
 -- | check number of states & final states
 -- | permute state labels & check for equality
-equivalent :: Automaton DFA -> Automaton DFA -> Bool
-equivalent a1 a2 =
+equivalentDFA :: Automaton DFA -> Automaton DFA -> Bool
+equivalentDFA a1 a2 =
     a1 == a2 ||
     let ma1 = minimize $ nfaToDFA a1
         ma2 = minimize $ nfaToDFA a2

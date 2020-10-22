@@ -6,6 +6,6 @@
 
 - DFA and NFA acceptance checker
 
-- Automata equivalence checker (FIX)
+- Automata/RegEx equivalence checker (FIX)
 
 - Thompson's construction: RE -> NFA
