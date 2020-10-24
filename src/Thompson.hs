@@ -1,5 +1,6 @@
 module Thompson
     ( convert
+    , convertRE
     , equivalent
     ) where
 
@@ -8,16 +9,16 @@ import RegExp
 
 import qualified Data.Map as Map
 
-convert' :: RE -> Automaton NFA
-convert' Empty =
+convertRE :: RE -> Automaton NFA
+convertRE Empty =
     N $ NFA ["s0", "s1"] "s0" (Map.fromList [(("s0", eps), ["s1"])]) ["s1"]
-convert' (Const c) =
+convertRE (Const c) =
     N $ NFA ["s0", "s1"] "s0" (Map.fromList [(("s0", c), ["s1"])]) ["s1"]
-convert' (Paren r) = convert' r
-convert' (Concat r1 r2) = N $ NFA allStates s1 allTrans f2'
+convertRE (Paren r) = convertRE r
+convertRE (Concat r1 r2) = N $ NFA allStates s1 allTrans f2'
   where
-    N (NFA st1 s1 t1 f1) = convert' r1
-    N (NFA st2 s2 t2 _) = convert' r2
+    N (NFA st1 s1 t1 f1) = convertRE r1
+    N (NFA st2 s2 t2 _) = convertRE r2
     adj = length st1
     st2' = adjustStates adj st2
     s2' = adjustState adj s2
@@ -25,10 +26,10 @@ convert' (Concat r1 r2) = N $ NFA allStates s1 allTrans f2'
     f2' = [last st2']
     allStates = st1 <> st2'
     allTrans = Map.union t1 $ Map.insert (head f1, eps) [s2'] t2'
-convert' (Alt r1 r2) = N $ NFA allStates "s0" allTrans final
+convertRE (Alt r1 r2) = N $ NFA allStates "s0" allTrans final
   where
-    N (NFA st1 _ t1 _) = convert' r1
-    N (NFA st2 _ t2 _) = convert' r2
+    N (NFA st1 _ t1 _) = convertRE r1
+    N (NFA st2 _ t2 _) = convertRE r2
     adj = length st1 + 1
     final = ["s" <> show (length st1 + length st2 + 1)]
     st1' = adjustStates 1 st1
@@ -40,9 +41,9 @@ convert' (Alt r1 r2) = N $ NFA allStates "s0" allTrans final
     addTrans1 = Map.singleton (last st1', eps) final
     addTrans2 = Map.singleton (last st2', eps) final
     allTrans = Map.unions [t1', t2', addTrans0, addTrans1, addTrans2]
-convert' (Star r) = N $ NFA allStates "s0" allTrans final
+convertRE (Star r) = N $ NFA allStates "s0" allTrans final
   where
-    N (NFA st _ t _) = convert' r
+    N (NFA st _ t _) = convertRE r
     st' = adjustStates 1 st
     t' = adjustTrans 1 t
     final = ["s" <> show (length st + 1)]
@@ -53,7 +54,7 @@ convert' (Star r) = N $ NFA allStates "s0" allTrans final
 
 -- | convert RE string to an NFA using Thompson's construction
 convert :: String -> Automaton NFA
-convert = convert' . parseRE
+convert = convertRE . parseRE
 
 equivalent :: String -> String -> Bool
 equivalent r1 r2 = equivalentDFA (minimize $ convert r1) $ minimize $ convert r2
