@@ -277,14 +277,15 @@ minimize nfa = minimize $ nfaToDFA nfa
 -- | check number of states & final states
 -- | permute state labels & check for equality
 equivalentDFA :: Automaton DFA -> Automaton DFA -> Bool
-equivalentDFA a1 a2 =
-    nfaToDFA a1 == nfaToDFA a2 ||
-    let ma1 = minimize $ nfaToDFA a1
-        ma2 = minimize $ nfaToDFA a2
-        sa1 = states ma1
-     in sa1 == states ma2 &&
-        length (final ma1) == length (final ma2) && equalPermutation ma1 ma2
+equivalentDFA d1 d2 =
+    d1' == d2' ||
+    let m1 = minimize d1'
+        m2 = minimize d2'
+     in states m1 == states m2 &&
+        length (final m1) == length (final m2) && equalPermutation m1 m2
   where
+    d1' = nfaToDFA d1
+    d2' = nfaToDFA d2
     equalPermutation :: Automaton DFA -> Automaton DFA -> Bool
     equalPermutation (D (DFA s i t1 f1)) (D (DFA _ _ t2 f2)) =
         let ps = map (i :) $ List.permutations $ s List.\\ [i]
