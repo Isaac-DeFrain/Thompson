@@ -278,7 +278,7 @@ minimize nfa = minimize $ nfaToDFA nfa
 -- | permute state labels & check for equality
 equivalentDFA :: Automaton DFA -> Automaton DFA -> Bool
 equivalentDFA a1 a2 =
-    a1 == a2 ||
+    nfaToDFA a1 == nfaToDFA a2 ||
     let ma1 = minimize $ nfaToDFA a1
         ma2 = minimize $ nfaToDFA a2
         sa1 = states ma1
@@ -381,6 +381,18 @@ genStates = do
     n <- QC.choose (1, 10) :: QC.Gen Int
     pure ["s" <> show i | i <- [0 .. n]]
 
+genStatesList :: Int -> [State] -> QC.Gen [[State]]
+genStatesList n s = genStatesList' n s $ pure []
+
+genStatesList' :: Int -> [State] -> QC.Gen [[State]] -> QC.Gen [[State]]
+genStatesList' n s l
+    | n == 0 = l
+    | n >= 1 = do
+        next <- uniqueSort <$> QC.sublistOf s `QC.suchThat` (/= [])
+        ss <- l
+        genStatesList' (n - 1) s $ pure $ next : ss
+    | otherwise = error "genStatesList' must be called with non-negative Int"
+
 instance QC.Arbitrary (Automaton DFA) where
     arbitrary = D <$> QC.arbitrary
     shrink (D dfa) = D <$> QC.shrink dfa
@@ -408,11 +420,8 @@ instance QC.Arbitrary NFA where
         states' <- genStates
         final' <- QC.sublistOf states'
         symbols' <- QC.listOf1 QC.arbitrary
-        states'' <- replicateEachGen states'
         let start' = "s0"
-        perms <-
-            QC.vectorOf (length states') $
-            uniqueSort <$> QC.sublistOf states'' `QC.suchThat` (/= [])
+        perms <- genStatesList (length states') states'
         deltaList <-
             QC.sublistOf (zip (zip states' symbols') perms) `QC.suchThat`
             (/= [])
