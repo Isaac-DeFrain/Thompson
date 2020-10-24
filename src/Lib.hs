@@ -339,6 +339,13 @@ start :: Automaton a -> State
 start (N (NFA _ s _ _)) = s
 start (D (DFA _ s _ _)) = s
 
+-- transition accessors
+transDFA :: Automaton DFA -> Ddelta
+transDFA (D (DFA _ _ t _)) = t
+
+transNFA :: Automaton NFA -> Ndelta
+transNFA (N (NFA _ _ t _)) = t
+
 -- final states accessor
 final :: Automaton a -> [State]
 final (N (NFA _ _ _ f)) = f
@@ -394,6 +401,30 @@ genStatesList' n s l
         genStatesList' (n - 1) s $ pure $ next : ss
     | otherwise = error "genStatesList' must be called with non-negative Int"
 
+cannotBeshrunk :: Automaton a -> Bool
+cannotBeshrunk a = length s <= 1 || length f <= 1 && List.sort s == i : f
+  where
+    s = states a
+    f = final a
+    i = start a
+
+dropState :: Automaton a -> State -> a
+dropState a s' =
+    case a of
+        D _ -> DFA s'' i (dt a) f'
+        N _ -> NFA s'' i (nt a) f'
+  where
+    s'' = states a List.\\ [s']
+    i = start a
+    f' = final a List.\\ [s']
+    dt :: Automaton DFA -> Ddelta
+    dt = Map.filterWithKey (notStateKey s') . transDFA
+    nt :: Automaton NFA -> Ndelta
+    nt = Map.filterWithKey (notStateKey s') . transNFA
+
+notStateKey :: State -> (State, Symbol) -> a -> Bool
+notStateKey k1 k2 _ = k1 /= fst k2
+
 instance QC.Arbitrary (Automaton DFA) where
     arbitrary = D <$> QC.arbitrary
     shrink (D dfa) = D <$> QC.shrink dfa
@@ -413,8 +444,11 @@ instance QC.Arbitrary DFA where
         deltaList <-
             QC.sublistOf (zip (zip states' symbols') perm) `QC.suchThat` (/= [])
         pure $ DFA states' start' (Map.fromList deltaList) final'
-    shrink = undefined
-    -- shrink states & adjust final states and delta accordingly
+    shrink d@(DFA s _ _ _)
+        | cannotBeshrunk (D d) = [d]
+        | otherwise =
+            let dl = tail s List.\\ [last s] -- list of states which can be dropped
+             in map (dropState (D d)) dl
 
 instance QC.Arbitrary NFA where
     arbitrary = do
@@ -427,8 +461,11 @@ instance QC.Arbitrary NFA where
             QC.sublistOf (zip (zip states' symbols') perms) `QC.suchThat`
             (/= [])
         pure $ NFA states' start' (Map.fromList deltaList) final'
-    shrink = undefined
-    -- shrink states & adjust final states and delta accordingly
+    shrink n@(NFA s _ _ _)
+        | cannotBeshrunk (N n) = [n]
+        | otherwise =
+            let dl = tail s List.\\ [last s] -- list of states which can be dropped
+             in map (dropState (N n)) dl
 
 deriving instance Eq (Automaton DFA)
 
