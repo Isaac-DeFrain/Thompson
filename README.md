@@ -1,4 +1,4 @@
-# Automata
+# Thompson - Regular Expressions and Automata
 
 - NFA to DFA conversion
 
@@ -9,3 +9,7 @@
 - Automata/RegEx equivalence checker (FIX)
 
 - Thompson's construction: RE -> NFA
+
+- RegEx parser
+
+- RegEx recognition
